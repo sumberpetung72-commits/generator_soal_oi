@@ -1,7 +1,8 @@
-import os
 import streamlit as st
 import google.generativeai as genai
-
+from PyPDF2 import PdfReader
+from docx import Document
+from io import BytesIO
 # =========================
 # CONFIG HALAMAN
 # =========================
@@ -112,3 +113,4 @@ Soal harus orisinal dan layak lomba OI.
             """,
             unsafe_allow_html=True
         )
+
