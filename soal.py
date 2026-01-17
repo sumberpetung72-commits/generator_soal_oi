@@ -20,7 +20,7 @@ def init_api():
             st.stop()
             
         genai.configure(api_key=api_key)
-        return genai.GenerativeModel('gemini-1.5-flash')
+       return genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"Terjadi kesalahan konfigurasi: {e}")
         st.stop()
@@ -165,3 +165,4 @@ with col2:
             st.warning("Silakan masukkan materi terlebih dahulu.")
 
 st.markdown('<div class="footer">© 2026 GuruAI Pro - Aplikasi AI Khusus Guru Indonesia</div>', unsafe_allow_html=True)
+
