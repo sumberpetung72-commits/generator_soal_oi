@@ -27,13 +27,15 @@ model = init_api()
 def export_to_word(text, school_name, mapel):
     doc = Document()
     
-    # Header Utama
-    title = doc.add_heading('PERANGKAT ADMINISTRASI PENILAIAN LENGKAP', 0)
+    # Judul & Identitas (Sesuai Format Kartu Soal.docx)
+    title = doc.add_heading('DOKUMEN ADMINISTRASI PENILAIAN', 0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Satuan Pendidikan: {school_name}")
     doc.add_paragraph(f"Mata Pelajaran: {mapel}")
-    doc.add_paragraph("Fase / Kelas: Fase D / VII")
-    doc.add_paragraph("-" * 45)
+    doc.add_paragraph("Kelas / Fase: VII / Fase D")
+    doc.add_paragraph("Kurikulum: Kurikulum Merdeka")
+    doc.add_paragraph("Penyusun: [Nama Guru]")
+    doc.add_paragraph("-" * 40)
     
     lines = text.split('\n')
     table_data = []
@@ -78,18 +80,19 @@ def export_to_word(text, school_name, mapel):
     buffer.seek(0)
     return buffer
 
-# --- 3. UI DASHBOARD ---
+# --- 3. UI STREAMLIT ---
 st.set_page_config(page_title="GuruAI - SMPN 2 Kalipare", layout="wide")
 
 st.markdown("""
     <style>
     .header-box { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; border-radius: 15px; text-align: center; }
     .main-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px; }
-    th, td { border: 1px solid #ddd !important; padding: 8px; text-align: left; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #ddd; }
+    th, td { border: 1px solid #ddd !important; padding: 10px; text-align: left; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<div class="header-box"><h1>SMP NEGERI 2 KALIPARE</h1><p>Generator Soal & Analisis Penilaian Terpisah</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-box"><h1>SMP NEGERI 2 KALIPARE</h1><p>Penghasil Kartu Soal & Administrasi Otomatis</p></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([2, 1])
 
@@ -107,47 +110,49 @@ with col1:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.write("⚙️ **Opsi Administrasi**")
+    st.write("⚙️ **Parameter**")
     mapel = st.text_input("Mata Pelajaran", "Seni Rupa")
     bentuk = st.multiselect("Bentuk Soal:", ["PG", "PG Kompleks", "Benar/Salah", "Menjodohkan", "Uraian"], default=["PG"])
+    jumlah = st.slider("Jumlah Soal", 1, 25, 5)
     
-    # Menu Fitur
-    pilihan_fitur = st.multiselect(
-        "Pilih Komponen:", 
-        ["Kisi-kisi", "Kartu Soal", "Analisis Ulangan Harian", "Daftar Nilai Siswa"],
-        default=["Kisi-kisi", "Kartu Soal", "Analisis Ulangan Harian", "Daftar Nilai Siswa"]
-    )
-    
-    jumlah = st.slider("Jumlah Soal", 1, 20, 5)
-    
-    if st.button("Generate Dokumen Terpisah ✨"):
+    if st.button("Generate Dokumen Lengkap ✨"):
         if materi_text:
-            with st.spinner("Menyusun administrasi penilaian..."):
+            with st.spinner("Menyusun Administrasi & Kartu Soal..."):
                 try:
                     prompt = (
-                        f"Sekolah: SMP NEGERI 2 KALIPARE. Mapel: {mapel}. Materi: {materi_text[:3000]}.\n"
-                        f"Tugas: Buat dokumen {', '.join(pilihan_fitur)} dengan jumlah {jumlah} soal {', '.join(bentuk)}.\n\n"
-                        f"ATURAN FORMAT:\n"
-                        f"1. ### KISI-KISI SOAL: Tabel (No | TP | Materi | Indikator | Level | No Soal).\n"
-                        f"2. ### KARTU SOAL: Gunakan tabel per nomor soal (Baris: CP, TP, Materi, Buku Sumber, Indikator, Level, Bentuk, No/Kunci/Skor, Stimulus, Rumusan Soal, Opsi).\n"
-                        f"3. ### ANALISIS ULANGAN HARIAN: Buat tabel TERPISAH (No Soal | Indikator yang Diuji | Tingkat Kesukaran | Daya Pembeda | Rekomendasi).\n"
-                        f"4. ### DAFTAR NILAI SISWA: Buat tabel TERPISAH (No | Nama Siswa | Skor Perolehan | Nilai Akhir | Capaian Kompetensi (Tuntas/Belum)).\n"
-                        f"5. ### NASKAH SOAL & KUNCI JAWABAN.\n\n"
-                        f"Gunakan simbol '|' untuk tabel agar bisa diekspor ke Word."
+                        f"Instansi: SMP NEGERI 2 KALIPARE. Mapel: {mapel}. Materi: {materi_text[:3000]}.\n"
+                        f"Buat {jumlah} soal {', '.join(bentuk)}.\n\n"
+                        f"STRUKTUR OUTPUT:\n"
+                        f"1. ### KISI-KISI SOAL (Tabel: No | TP | Materi | Indikator | Level | No Soal)\n"
+                        f"2. ### KARTU SOAL (Wajib menggunakan tabel Markdown untuk setiap nomor dengan baris):\n"
+                        f"   | Komponen | Keterangan |\n"
+                        f"   | :--- | :--- |\n"
+                        f"   | Capaian Pembelajaran | [Isi CP] |\n"
+                        f"   | Tujuan Pembelajaran | [Isi TP] |\n"
+                        f"   | Materi Utama | [Isi Materi] |\n"
+                        f"   | Buku Sumber | [Tuliskan Judul Buku yang Relevan] |\n"
+                        f"   | Indikator Soal | [Isi Indikator] |\n"
+                        f"   | Level Kognitif | [Isi Level] |\n"
+                        f"   | Bentuk Soal | [Isi Bentuk] |\n"
+                        f"   | No Soal, Kunci, Skor | [Isi Detail] |\n"
+                        f"   | Stimulus | [Isi Stimulus] |\n"
+                        f"   | Rumusan Soal | [Isi Soal] |\n"
+                        f"   | Pilihan Jawaban | [Isi Opsi] |\n\n"
+                        f"3. ### NASKAH SOAL & KUNCI JAWABAN."
                     )
                     
                     res = model.generate_content(prompt)
                     output = res.text
                     
-                    st.markdown("### 📋 Pratinjau Hasil")
+                    st.markdown("### 📋 Pratinjau")
                     st.markdown(output)
                     
                     st.divider()
                     st.download_button(
-                        "📥 Download Dokumen Lengkap (Word)",
+                        "📥 Download Word (Tabel & Buku Sumber)",
                         data=export_to_word(output, "SMP NEGERI 2 KALIPARE", mapel),
-                        file_name=f"Administrasi_Lengkap_{mapel}.docx",
+                        file_name=f"Administrasi_{mapel}.docx",
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error(f"Terjadi kesalahan: {e}")
+                    st.error(f"Gagal: {e}")
