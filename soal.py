@@ -5,7 +5,7 @@ from docx import Document
 from io import BytesIO
 import os
 
-# --- 1. KONFIGURASI KEAMANAN API ---
+# --- 1. KONFIGURASI KEAMANAN & INISIALISASI MODEL ---
 def init_api():
     try:
         # Mengambil API Key dari Secrets Streamlit Cloud
@@ -15,23 +15,38 @@ def init_api():
             api_key = os.getenv("GEMINI_API_KEY")
         
         if not api_key:
-            st.error("⚠️ API Key tidak ditemukan! Pastikan sudah memasukkan GEMINI_API_KEY di menu Secrets.")
+            st.error("⚠️ API Key tidak ditemukan! Masukkan GEMINI_API_KEY di menu Secrets.")
             st.stop()
             
         genai.configure(api_key=api_key)
         
-        # Menggunakan gemini-1.0-pro untuk kompatibilitas maksimal dengan v1beta
-        return genai.GenerativeModel('gemini-1.0-pro')
+        # STRATEGI AUTO-DETECT: Mencari model yang tersedia untuk API Key Anda
+        with st.spinner("Menghubungkan ke server Google AI..."):
+            available_models = [
+                m.name for m in genai.list_models() 
+                if 'generateContent' in m.supported_generation_methods
+            ]
+            
+            if available_models:
+                # Mengambil model pertama yang tersedia (biasanya gemini-1.5-flash atau pro)
+                selected_model = available_models[0]
+                return genai.GenerativeModel(selected_model)
+            else:
+                st.error("❌ Tidak ada model Gemini yang aktif untuk API Key ini.")
+                st.stop()
+                
     except Exception as e:
-        st.error(f"Kesalahan Inisialisasi: {e}")
+        st.error(f"Kesalahan Konfigurasi: {e}")
+        st.info("Saran: Pastikan API Key Anda benar dan sudah mengaktifkan Generative Language API di Google AI Studio.")
         st.stop()
 
+# Inisialisasi Model
 model = init_api()
 
 # --- 2. FUNGSI EXPORT KE WORD ---
 def export_to_word(text):
     doc = Document()
-    doc.add_heading('GuruAI Pro: Perangkat Ujian', 0)
+    doc.add_heading('GuruAI Pro: Hasil Perangkat Ujian', 0)
     doc.add_paragraph(text)
     buffer = BytesIO()
     doc.save(buffer)
@@ -41,7 +56,6 @@ def export_to_word(text):
 # --- 3. TAMPILAN ANTARMUKA (UI) ---
 st.set_page_config(page_title="GuruAI Pro", page_icon="🎓", layout="wide")
 
-# CSS untuk mempercantik tampilan
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
@@ -60,72 +74,65 @@ st.markdown("""
         font-weight: bold;
         height: 3.5em;
         width: 100%;
-        transition: 0.3s;
-    }
-    div.stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 4. KONTEN UTAMA ---
-st.title("🎓 GuruAI Pro: Generator Soal HOTS")
-st.write("Buat soal ujian dan kisi-kisi otomatis berbasis Kurikulum Merdeka.")
+st.title("🎓 GuruAI Pro: Generator Soal")
+st.write("Aplikasi pembuat soal otomatis berbasis AI untuk Guru Indonesia.")
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.markdown('<div class="main-card">', unsafe_allow_html=True)
-    input_choice = st.radio("Pilih Sumber Materi:", ["Ketik Teks Manual", "Unggah Dokumen PDF"])
+    input_choice = st.radio("Metode Input Materi:", ["Teks Manual", "Upload PDF"])
     
     materi_final = ""
-    if input_choice == "Ketik Teks Manual":
+    if input_choice == "Teks Manual":
         materi_final = st.text_area("Masukkan Materi Pelajaran:", height=300, placeholder="Tempel materi di sini...")
     else:
-        file_pdf = st.file_uploader("Upload PDF Materi", type=["pdf"])
+        file_pdf = st.file_uploader("Pilih file PDF", type=["pdf"])
         if file_pdf:
-            with st.spinner("Membaca dokumen..."):
-                reader = PdfReader(file_pdf)
-                for page in reader.pages:
-                    materi_final += page.extract_text()
-            st.success("Teks PDF berhasil diambil!")
+            reader = PdfReader(file_pdf)
+            for page in reader.pages:
+                materi_final += page.extract_text()
+            st.success("Teks PDF berhasil dimuat!")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.write("⚙️ **Pengaturan Soal**")
-    jenjang = st.selectbox("Jenjang Sekolah", ["SD", "SMP", "SMA/SMK"])
-    jumlah = st.slider("Jumlah Soal PG", 1, 20, 5)
+    st.write("⚙️ **Pengaturan**")
+    jenjang = st.selectbox("Jenjang", ["SD", "SMP", "SMA/SMK"])
+    jumlah = st.slider("Jumlah Soal", 1, 20, 5)
     
-    if st.button("Generate Sekarang ✨"):
+    if st.button("Generate Soal ✨"):
         if materi_final:
-            with st.spinner("🤖 AI sedang menyusun soal..."):
+            with st.spinner("🤖 AI sedang berpikir..."):
                 try:
                     prompt = (
-                        f"Bertindaklah sebagai pakar pembuat soal Kurikulum Merdeka. "
-                        f"Berdasarkan materi: {materi_final[:5000]}. "
-                        f"Buatkan {jumlah} soal pilihan ganda standar HOTS untuk jenjang {jenjang}. "
-                        f"Sertakan tabel kisi-kisi dan kunci jawaban di akhir."
+                        f"Buatkan {jumlah} soal pilihan ganda HOTS jenjang {jenjang} "
+                        f"berdasarkan materi berikut: {materi_final[:5000]}. "
+                        f"Berikan juga kisi-kisi dan kunci jawabannya."
                     )
                     
                     response = model.generate_content(prompt)
-                    hasil_teks = response.text
+                    hasil = response.text
                     
                     st.markdown("---")
-                    st.success("✅ Soal Berhasil Dibuat!")
-                    st.markdown(hasil_teks)
+                    st.success("Selesai!")
+                    st.markdown(hasil)
                     
-                    # Tombol Download
-                    word_file = export_to_word(hasil_teks)
+                    # Download Button
+                    word_file = export_to_word(hasil)
                     st.download_button(
-                        label="📥 Download File Word (.docx)",
+                        label="📥 Download ke Word (.docx)",
                         data=word_file,
-                        file_name="Soal_GuruAI_Pro.docx",
+                        file_name="Soal_GuruAI.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
                 except Exception as e:
-                    st.error(f"Terjadi kesalahan saat memproses AI: {e}")
+                    st.error(f"Gagal memproses AI: {e}")
         else:
-            st.warning("Mohon masukkan materi terlebih dahulu!")
+            st.warning("Materi tidak boleh kosong!")
 
-st.markdown("<br><center style='color: #888;'>© 2026 GuruAI Pro Indonesia</center>", unsafe_allow_html=True)
+st.markdown("<br><center style='color: #888;'>© 2026 GuruAI Pro</center>", unsafe_allow_html=True)
