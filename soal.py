@@ -16,7 +16,7 @@ def init_api():
             api_key = os.getenv("GEMINI_API_KEY")
         
         if not api_key:
-            st.error("⚠️ API Key tidak ditemukan! Masukkan GEMINI_API_KEY di menu Secrets.")
+            st.error("⚠️ API Key tidak ditemukan!")
             st.stop()
             
         genai.configure(api_key=api_key)
@@ -39,19 +39,14 @@ def init_api():
 
 model = init_api()
 
-# --- 2. FUNGSI EXPORT KE WORD DENGAN KOP SEKOLAH ---
+# --- 2. FUNGSI EXPORT KE WORD ---
 def export_to_word(text):
     doc = Document()
-    
-    # Menambah Header SMP NEGERI 2 KALIPARE di Word
     header = doc.add_heading('SMP NEGERI 2 KALIPARE', 0)
     header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    subheader = doc.add_paragraph('PERANGKAT PENILAIAN PEMBELAJARAN')
-    subheader.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph('ADMINISTRASI PENILAIAN KURIKULUM MERDEKA').alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph("_" * 50).alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Isi konten
     doc.add_paragraph(text)
     
     buffer = BytesIO()
@@ -64,30 +59,20 @@ st.set_page_config(page_title="GuruAI - SMPN 2 Kalipare", page_icon="🎓", layo
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f8f9fa; }
+    .stApp { background-color: #f4f7f6; }
     .header-box {
-        background-color: #007bff;
-        color: white;
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 25px;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: white; padding: 25px; border-radius: 15px;
+        text-align: center; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     .main-card {
-        background-color: white; 
-        padding: 30px; 
-        border-radius: 15px; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
+        background-color: white; padding: 30px; border-radius: 15px; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px;
     }
     div.stButton > button {
-        background: linear-gradient(135deg, #28a745, #85d017);
-        color: white !important;
-        border-radius: 10px !important;
-        border: none !important;
-        font-weight: bold;
-        height: 3.5em;
-        width: 100%;
+        background: linear-gradient(135deg, #ff9966, #ff5e62);
+        color: white !important; border-radius: 10px !important;
+        border: none !important; font-weight: bold; height: 3.5em; width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -95,8 +80,8 @@ st.markdown("""
 # --- 4. HEADER SEKOLAH ---
 st.markdown("""
     <div class="header-box">
-        <h1 style='margin:0;'>SMP NEGERI 2 KALIPARE</h1>
-        <p style='margin:0;'>Sistem Generator Soal & Perangkat Ujian Otomatis</p>
+        <h1 style='margin:0; font-family: Arial;'>SMP NEGERI 2 KALIPARE</h1>
+        <p style='margin:0; opacity: 0.9;'>Penyusunan Kisi-kisi, Kartu Soal, dan Soal HOTS Otomatis</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -108,9 +93,9 @@ with col1:
     
     materi_final = ""
     if input_choice == "Teks Manual":
-        materi_final = st.text_area("Masukkan Materi Pelajaran:", height=300, placeholder="Tempel materi di sini...")
+        materi_final = st.text_area("Masukkan Materi / Ringkasan:", height=300, placeholder="Tempel materi di sini...")
     else:
-        file_pdf = st.file_uploader("Pilih file PDF", type=["pdf"])
+        file_pdf = st.file_uploader("Upload file PDF Materi", type=["pdf"])
         if file_pdf:
             reader = PdfReader(file_pdf)
             for page in reader.pages:
@@ -119,38 +104,41 @@ with col1:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.write("⚙️ **Pengaturan**")
-    jenjang = st.selectbox("Jenjang", ["SMP", "Lainnya"])
-    jumlah = st.slider("Jumlah Soal", 1, 30, 10)
+    st.write("⚙️ **Parameter Dokumen**")
+    mapel = st.text_input("Mata Pelajaran:", placeholder="Contoh: IPA / Matematika")
+    jumlah = st.slider("Jumlah Soal", 1, 30, 5)
     
-    if st.button("Generate Soal Sekarang ✨"):
+    if st.button("Generate Dokumen Lengkap ✨"):
         if materi_final:
-            with st.spinner("🤖 AI sedang menyusun soal untuk SMPN 2 Kalipare..."):
+            with st.spinner("🤖 AI sedang menyusun Kisi-kisi, Kartu Soal, dan Soal HOTS..."):
                 try:
                     prompt = (
-                        f"Bertindaklah sebagai guru profesional di SMP NEGERI 2 KALIPARE. "
-                        f"Buatkan {jumlah} soal pilihan ganda HOTS jenjang {jenjang} "
-                        f"berdasarkan materi berikut: {materi_final[:5000]}. "
-                        f"Sertakan kisi-kisi dan kunci jawabannya."
+                        f"Anda adalah Guru Ahli di SMP NEGERI 2 KALIPARE. Berdasarkan materi ini: {materi_final[:5000]}. "
+                        f"Buatkan dokumen ujian lengkap untuk mata pelajaran {mapel} yang terdiri dari:\n\n"
+                        f"1. **Tabel Kisi-kisi Soal**: (Kolom: No, Tujuan Pembelajaran, Materi, Indikator Soal, Level Kognitif, Bentuk Soal).\n"
+                        f"2. **Tabel Kartu Soal**: Buat tabel untuk setiap nomor soal yang berisi Kompetensi/TP, Materi, Indikator, Level Kognitif, dan Rumusan Soal.\n"
+                        f"3. **Naskah Soal HOTS**: {jumlah} soal Pilihan Ganda dengan stimulus (cerita/gambar/tabel), pilihan jawaban A, B, C, D yang menantang.\n"
+                        f"4. **Kunci Jawaban & Pembahasan**.\n\n"
+                        f"Gunakan format tabel Markdown yang rapi untuk Kisi-kisi dan Kartu Soal."
                     )
                     
                     response = model.generate_content(prompt)
                     hasil = response.text
                     
                     st.markdown("---")
-                    st.success("✅ Soal Berhasil Dibuat!")
+                    st.success("✅ Dokumen Berhasil Disusun!")
                     st.markdown(hasil)
                     
                     word_file = export_to_word(hasil)
                     st.download_button(
-                        label="📥 Download File untuk SMPN 2 Kalipare (.docx)",
+                        label="📥 Download Hasil (Word) - SMPN 2 Kalipare",
                         data=word_file,
-                        file_name="Soal_SMPN2_Kalipare.docx",
+                        file_name=f"Perangkat_Soal_{mapel}_SMPN2KLP.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
                 except Exception as e:
                     st.error(f"Gagal memproses AI: {e}")
         else:
-            st.warning("Materi tidak boleh kosong!")
+            st.warning("Mohon masukkan materi terlebih dahulu.")
 
-st.markdown("<br><center style='color: #888;'>© 2026 Perangkat AI - SMP NEGERI 2 KALIPARE</center>", unsafe_allow_html=True)
+st.markdown("<br><center style='color: #888;'>© 2026 Admin Kurikulum - SMP NEGERI 2 KALIPARE</center>", unsafe_allow_html=True)
