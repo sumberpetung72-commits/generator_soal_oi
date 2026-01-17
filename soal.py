@@ -23,13 +23,15 @@ def init_api():
 
 model = init_api()
 
-# --- 2. FUNGSI EKSPOR WORD (LOGIKA TABEL DIPERKUAT) ---
+# --- 2. FUNGSI EKSPOR WORD (LOGIKA PARSING TABEL TERKUAT) ---
 def export_to_word(text, school_name, mapel):
     doc = Document()
     
+    # Judul Dokumen
+    title = doc.add_heading('DOKUMEN ADMINISTRASI PENILAIAN', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
     # Header Identitas
-    h = doc.add_heading('DOKUMEN ADMINISTRASI PENILAIAN', 0)
-    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Satuan Pendidikan: {school_name}")
     doc.add_paragraph(f"Mata Pelajaran: {mapel}")
     doc.add_paragraph("Kelas / Fase: VII / Fase D")
@@ -38,34 +40,44 @@ def export_to_word(text, school_name, mapel):
     
     lines = text.split('\n')
     table_data = []
-    is_table = False
+    in_table = False
 
     for line in lines:
         clean_line = line.strip()
-        # Deteksi baris tabel Markdown
-        if '|' in clean_line and not all(c in '|- ' for c in clean_line):
+        
+        # Deteksi Baris Tabel (mengandung karakter |)
+        if '|' in clean_line:
+            # Mengabaikan baris pemisah markdown seperti |---|---|
+            if all(c in '|- : ' for c in clean_line) and clean_line != "":
+                continue
+            
+            # Mengambil data sel
             cells = [c.strip() for c in clean_line.split('|') if c.strip()]
             if cells:
                 table_data.append(cells)
-                is_table = True
+                in_table = True
         else:
-            # Jika tabel berakhir, buat tabel di Word
-            if is_table and table_data:
+            # Jika keluar dari baris tabel, buat tabel di Word
+            if in_table and table_data:
                 try:
-                    table = doc.add_table(rows=len(table_data), cols=len(table_data[0]))
+                    # Tentukan jumlah kolom maksimal agar tidak error
+                    num_cols = max(len(row) for row in table_data)
+                    table = doc.add_table(rows=len(table_data), cols=num_cols)
                     table.style = 'Table Grid'
+                    
                     for r, row in enumerate(table_data):
                         for c, val in enumerate(row):
-                            if c < len(table_data[0]):
+                            if c < num_cols:
                                 table.cell(r, c).text = val
-                except:
-                    pass
-                doc.add_paragraph("")
+                except Exception as e:
+                    doc.add_paragraph(f"[Gagal membuat tabel: {str(e)}]")
+                
+                doc.add_paragraph("") # Spasi setelah tabel
                 table_data = []
-                is_table = False
+                in_table = False
             
-            # Tambahkan teks biasa
-            if clean_line and not is_table:
+            # Tambahkan teks biasa (Judul atau Soal)
+            if clean_line:
                 if clean_line.startswith('###'):
                     doc.add_heading(clean_line.replace('###', ''), level=1)
                 elif clean_line.startswith('**'):
@@ -86,7 +98,7 @@ st.markdown("""
     <style>
     .header-box { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; border-radius: 15px; text-align: center; }
     .main-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #ddd; }
     th, td { border: 1px solid #ddd !important; padding: 10px; text-align: left; }
     </style>
     """, unsafe_allow_html=True)
@@ -110,39 +122,23 @@ with col1:
 
 with col2:
     st.write("⚙️ **Parameter Administrasi**")
-    mapel_name = st.text_input("Mata Pelajaran", "Seni Rupa")
-    
-    bentuk_terpilih = st.multiselect(
-        "Bentuk Soal:",
-        ["Pilihan Ganda (PG)", "PG Kompleks", "Benar/Salah", "Menjodohkan", "Uraian"],
-        default=["Pilihan Ganda (PG)"]
-    )
-    
+    mapel_name = st.text_input("Mata Pelajaran", "Umum")
+    bentuk_soal = st.multiselect("Bentuk Soal:", ["PG", "PG Kompleks", "Benar/Salah", "Menjodohkan", "Uraian"], default=["PG"])
     jumlah_soal = st.slider("Jumlah Soal", 1, 30, 5)
     
-    if st.button("Generate Administrasi ✨"):
+    if st.button("Generate Dokumen ✨"):
         if materi_final:
             with st.spinner("Menyusun Kisi-kisi dan Kartu Soal..."):
                 try:
                     prompt = (
-                        f"Sekolah: SMP NEGERI 2 KALIPARE. Mapel: {mapel_name}. Materi: {materi_final[:3000]}.\n"
-                        f"Buat {jumlah_soal} soal dengan variasi bentuk: {', '.join(bentuk_terpilih)}.\n\n"
-                        f"INSTRUKSI FORMAT TABEL:\n"
-                        f"1. ### KISI-KISI SOAL: Buat satu tabel Markdown dengan kolom (No | TP | Materi Utama | Indikator | Level | No Soal).\n"
-                        f"2. ### KARTU SOAL: Untuk SETIAP nomor, buat satu tabel Markdown utuh dengan baris:\n"
-                        f"   | Komponen | Keterangan |\n"
-                        f"   | :--- | :--- |\n"
-                        f"   | Capaian Pembelajaran | [Isi CP] |\n"
-                        f"   | Tujuan Pembelajaran | [Isi TP] |\n"
-                        f"   | Materi Utama | [Isi Materi] |\n"
-                        f"   | Indikator Soal | [Isi Indikator] |\n"
-                        f"   | Level Kognitif | [Isi Level] |\n"
-                        f"   | Bentuk Soal | [Isi Bentuk] |\n"
-                        f"   | No Soal, Kunci, Skor | [Isi Detail] |\n"
-                        f"   | Stimulus | [Isi Stimulus] |\n"
-                        f"   | Rumusan Soal | [Isi Soal] |\n"
-                        f"   | Pilihan Jawaban | [Isi A,B,C,D jika ada] |\n\n"
-                        f"3. ### NASKAH SOAL: (Tuliskan soal secara terpisah dari tabel)."
+                        f"Sekolah: SMP NEGERI 2 KALIPARE. Mapel: {mapel_name}. Materi: {materi_final[:3500]}.\n"
+                        f"Buat {jumlah_soal} soal {', '.join(bentuk_soal)}.\n\n"
+                        f"FORMAT WAJIB:\n"
+                        f"1. ### KISI-KISI SOAL: Buat tabel (No | TP | Materi | Indikator | Level | No Soal).\n"
+                        f"2. ### KARTU SOAL: Setiap nomor soal wajib dibuat dalam satu tabel Markdown yang berisi baris: "
+                        f"Capaian Pembelajaran, Tujuan Pembelajaran, Materi Utama, Indikator Soal, Level Kognitif, Bentuk Soal, No Soal|Kunci|Skor, Stimulus, Rumusan Soal, Pilihan Jawaban.\n"
+                        f"3. ### NASKAH SOAL: List soal secara rapi.\n\n"
+                        f"PASTIKAN semua tabel menggunakan karakter '|' sebagai pemisah kolom."
                     )
                     
                     response = model.generate_content(prompt)
@@ -153,7 +149,7 @@ with col2:
                     
                     st.divider()
                     st.download_button(
-                        "📥 Download Word",
+                        "📥 Download Word (Format Tabel Rapi)",
                         data=export_to_word(hasil_teks, "SMP NEGERI 2 KALIPARE", mapel_name),
                         file_name=f"Administrasi_{mapel_name}.docx",
                         use_container_width=True
