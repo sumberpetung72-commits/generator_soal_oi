@@ -18,7 +18,9 @@ def init_api():
             st.stop()
             
         genai.configure(api_key=api_key)
-        return genai.GenerativeModel('gemini-pro')
+        
+        # Menggunakan versi terbaru yang paling stabil
+        return genai.GenerativeModel('gemini-1.5-flash-latest')
     except Exception as e:
         st.error(f"Kesalahan Konfigurasi: {e}")
         st.stop()
@@ -81,18 +83,21 @@ with col2:
         if materi_final:
             with st.spinner("AI sedang bekerja..."):
                 try:
-                    prompt = f"Buatkan {jumlah} soal PG HOTS untuk {jenjang} dari materi: {materi_final[:5000]}"
+                    # Instruksi lebih detail agar hasil lebih bagus
+                    prompt = f"Buatkan {jumlah} soal Pilihan Ganda standar HOTS untuk jenjang {jenjang} berdasarkan materi berikut ini. Sertakan kunci jawaban di bagian akhir: {materi_final[:5000]}"
                     response = model.generate_content(prompt)
                     hasil = response.text
+                    
+                    st.success("Berhasil Membuat Soal!")
                     st.markdown(hasil)
                     
                     st.download_button(
-                        label="📥 Download Word",
+                        label="📥 Download Hasil ke Word",
                         data=export_to_word(hasil),
-                        file_name="soal_ai.docx",
+                        file_name="soal_ujian_ai.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
                 except Exception as e:
-                    st.error(f"Gagal: {e}")
+                    st.error(f"Gagal saat generate soal: {e}")
         else:
-            st.warning("Materi kosong!")
+            st.warning("Materi belum diisi!")
