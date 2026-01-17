@@ -5,154 +5,100 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from io import BytesIO
 import os
+import time
 
-# --- 1. KONFIGURASI API ---
+# --- 1. KONFIGURASI API DENGAN FALLBACK & RETRY ---
 def init_api():
+    api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        st.error("⚠️ API Key tidak ditemukan!")
+        st.stop()
+    
+    genai.configure(api_key=api_key)
+    
+    # Mencoba daftar model yang tersedia
     try:
-        api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            st.error("⚠️ API Key tidak ditemukan!")
-            st.stop()
-        genai.configure(api_key=api_key)
         models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        # Prioritas Flash, jika gagal nanti akan ada penanganan error
         target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
         return genai.GenerativeModel(target)
-    except Exception as e:
-        st.error(f"Error Inisialisasi: {e}")
-        st.stop()
+    except Exception:
+        return genai.GenerativeModel('gemini-1.5-flash') # Default fallback
 
 model = init_api()
 
 # --- 2. FUNGSI EKSPOR WORD ---
 def export_to_word(text, school_name, mapel):
     doc = Document()
-    
-    # Judul & Identitas (Sesuai Format Kartu Soal.docx)
-    title = doc.add_heading('DOKUMEN ADMINISTRASI PENILAIAN', 0)
+    title = doc.add_heading('ADMINISTRASI PENILAIAN TERPADU', 0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    doc.add_paragraph(f"Satuan Pendidikan: {school_name}")
-    doc.add_paragraph(f"Mata Pelajaran: {mapel}")
-    doc.add_paragraph("Kelas / Fase: VII / Fase D")
-    doc.add_paragraph("Kurikulum: Kurikulum Merdeka")
-    doc.add_paragraph("Penyusun: [Nama Guru]")
-    doc.add_paragraph("-" * 40)
+    doc.add_paragraph(f"Satuan Pendidikan: {school_name}\nMata Pelajaran: {mapel}\nKurikulum: Kurikulum Merdeka\n" + "-"*40)
     
-    lines = text.split('\n')
     table_data = []
-    in_table = False
-
-    for line in lines:
-        clean_line = line.strip()
-        if '|' in clean_line:
-            if all(c in '|- : ' for c in clean_line) and clean_line != "":
-                continue
-            cells = [c.strip() for c in clean_line.split('|') if c.strip()]
-            if cells:
-                table_data.append(cells)
-                in_table = True
+    for line in text.split('\n'):
+        clean = line.strip()
+        if '|' in clean:
+            if all(c in '|- : ' for c in clean) and clean != "": continue
+            cells = [c.strip() for c in clean.split('|') if c.strip()]
+            if cells: table_data.append(cells)
         else:
-            if in_table and table_data:
-                try:
-                    num_cols = max(len(row) for row in table_data)
-                    table = doc.add_table(rows=len(table_data), cols=num_cols)
-                    table.style = 'Table Grid'
-                    for r, row in enumerate(table_data):
-                        for c, val in enumerate(row):
-                            if c < num_cols:
-                                table.cell(r, c).text = val
-                except:
-                    pass
+            if table_data:
+                table = doc.add_table(rows=len(table_data), cols=max(len(r) for r in table_data))
+                table.style = 'Table Grid'
+                for r, row in enumerate(table_data):
+                    for c, val in enumerate(row):
+                        if c < len(table.columns): table.cell(r, c).text = val
                 doc.add_paragraph("")
                 table_data = []
-                in_table = False
-            
-            if clean_line:
-                if clean_line.startswith('###'):
-                    doc.add_heading(clean_line.replace('###', ''), level=1)
-                elif clean_line.startswith('**'):
-                    p = doc.add_paragraph()
-                    p.add_run(clean_line.replace('**', '')).bold = True
-                else:
-                    doc.add_paragraph(clean_line)
-
+            if clean:
+                if clean.startswith('###'): doc.add_heading(clean.replace('###', ''), level=1)
+                else: doc.add_paragraph(clean)
+    
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
-# --- 3. UI STREAMLIT ---
+# --- 3. UI DASHBOARD ---
 st.set_page_config(page_title="GuruAI - SMPN 2 Kalipare", layout="wide")
-
-st.markdown("""
-    <style>
-    .header-box { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; border-radius: 15px; text-align: center; }
-    .main-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #ddd; }
-    th, td { border: 1px solid #ddd !important; padding: 10px; text-align: left; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.markdown('<div class="header-box"><h1>SMP NEGERI 2 KALIPARE</h1><p>Penghasil Kartu Soal & Administrasi Otomatis</p></div>', unsafe_allow_html=True)
+st.markdown('<style>.header { background: #1e3c72; color: white; padding: 20px; border-radius: 10px; text-align: center; }</style>', unsafe_allow_html=True)
+st.markdown('<div class="header"><h1>SMP NEGERI 2 KALIPARE</h1><p>Sistem Administrasi Penilaian Otomatis</p></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([2, 1])
-
 with col1:
-    st.markdown('<div class="main-card">', unsafe_allow_html=True)
-    source = st.radio("Input Materi:", ["Teks Manual", "Upload PDF"])
-    materi_text = ""
-    if source == "Teks Manual":
-        materi_text = st.text_area("Tempelkan Materi Pelajaran:", height=300)
+    source = st.radio("Materi:", ["Teks", "PDF"])
+    materi = ""
+    if source == "Teks": materi = st.text_area("Input Materi:", height=250)
     else:
-        f = st.file_uploader("Pilih PDF", type=["pdf"])
+        f = st.file_uploader("Upload PDF", type=["pdf"])
         if f:
-            pdf = PdfReader(f)
-            for p in pdf.pages: materi_text += p.extract_text()
-    st.markdown('</div>', unsafe_allow_html=True)
+            reader = PdfReader(f)
+            for p in reader.pages: materi += p.extract_text()
 
 with col2:
-    st.write("⚙️ **Parameter**")
-    mapel = st.text_input("Mata Pelajaran", "Seni Rupa")
-    bentuk = st.multiselect("Bentuk Soal:", ["PG", "PG Kompleks", "Benar/Salah", "Menjodohkan", "Uraian"], default=["PG"])
-    jumlah = st.slider("Jumlah Soal", 1, 25, 5)
-    
-    if st.button("Generate Dokumen Lengkap ✨"):
-        if materi_text:
-            with st.spinner("Menyusun Administrasi & Kartu Soal..."):
+    mapel = st.text_input("Mapel", "Seni Rupa")
+    pilihan = st.multiselect("Komponen:", ["Kisi-kisi", "Kartu Soal", "Analisis UH", "Daftar Nilai"], default=["Kisi-kisi", "Kartu Soal"])
+    jumlah = st.slider("Jumlah Soal", 1, 20, 5)
+
+    if st.button("Generate Dokumen ✨"):
+        if materi:
+            with st.spinner("Proses AI... (Mohon tunggu jika antrean padat)"):
                 try:
                     prompt = (
-                        f"Instansi: SMP NEGERI 2 KALIPARE. Mapel: {mapel}. Materi: {materi_text[:3000]}.\n"
-                        f"Buat {jumlah} soal {', '.join(bentuk)}.\n\n"
-                        f"STRUKTUR OUTPUT:\n"
-                        f"1. ### KISI-KISI SOAL (Tabel: No | TP | Materi | Indikator | Level | No Soal)\n"
-                        f"2. ### KARTU SOAL (Wajib menggunakan tabel Markdown untuk setiap nomor dengan baris):\n"
-                        f"   | Komponen | Keterangan |\n"
-                        f"   | :--- | :--- |\n"
-                        f"   | Capaian Pembelajaran | [Isi CP] |\n"
-                        f"   | Tujuan Pembelajaran | [Isi TP] |\n"
-                        f"   | Materi Utama | [Isi Materi] |\n"
-                        f"   | Buku Sumber | [Tuliskan Judul Buku yang Relevan] |\n"
-                        f"   | Indikator Soal | [Isi Indikator] |\n"
-                        f"   | Level Kognitif | [Isi Level] |\n"
-                        f"   | Bentuk Soal | [Isi Bentuk] |\n"
-                        f"   | No Soal, Kunci, Skor | [Isi Detail] |\n"
-                        f"   | Stimulus | [Isi Stimulus] |\n"
-                        f"   | Rumusan Soal | [Isi Soal] |\n"
-                        f"   | Pilihan Jawaban | [Isi Opsi] |\n\n"
-                        f"3. ### NASKAH SOAL & KUNCI JAWABAN."
+                        f"Sekolah: SMP NEGERI 2 KALIPARE. Mapel: {mapel}. Materi: {materi[:2500]}.\n"
+                        f"Buatlah komponen berikut secara TERPISAH dan BERURUTAN:\n"
+                        f"1. ### KISI-KISI SOAL (Tabel: No|TP|Materi|Indikator|Level|No Soal)\n"
+                        f"2. ### KARTU SOAL (Tabel per nomor soal: CP|TP|Materi|Buku Sumber|Indikator|Level|Bentuk|No-Kunci-Skor|Stimulus|Soal|Opsi)\n"
+                        f"3. ### ANALISIS ULANGAN HARIAN (Tabel TERPISAH: No Soal|Indikator Diuji|Tingkat Kesukaran|Daya Pembeda|Rekomendasi)\n"
+                        f"4. ### DAFTAR NILAI SISWA (Tabel TERPISAH: No|Nama Siswa|Skor|Nilai Akhir|Ketuntasan)\n"
+                        f"Gunakan format tabel Markdown '|' untuk semua tabel."
                     )
-                    
-                    res = model.generate_content(prompt)
-                    output = res.text
-                    
-                    st.markdown("### 📋 Pratinjau")
-                    st.markdown(output)
-                    
-                    st.divider()
-                    st.download_button(
-                        "📥 Download Word (Tabel & Buku Sumber)",
-                        data=export_to_word(output, "SMP NEGERI 2 KALIPARE", mapel),
-                        file_name=f"Administrasi_{mapel}.docx",
-                        use_container_width=True
-                    )
+                    # Handle Quota Limit 429
+                    response = model.generate_content(prompt)
+                    st.markdown(response.text)
+                    st.download_button("📥 Download Word", export_to_word(response.text, "SMP NEGERI 2 KALIPARE", mapel), f"Admin_{mapel}.docx")
                 except Exception as e:
-                    st.error(f"Gagal: {e}")
+                    if "429" in str(e):
+                        st.error("⚠️ Kuota API habis (Error 429). Silakan tunggu 60 detik atau gunakan API Key lain.")
+                    else:
+                        st.error(f"Terjadi kesalahan: {e}")
