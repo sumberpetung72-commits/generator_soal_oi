@@ -16,12 +16,13 @@ def init_api():
             api_key = os.getenv("GEMINI_API_KEY")
         
         if not api_key:
-            st.error("⚠️ API Key tidak ditemukan!")
+            st.error("⚠️ API Key tidak ditemukan di Secrets!")
             st.stop()
             
         genai.configure(api_key=api_key)
+        # Mencari model yang tersedia secara dinamis
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        return genai.GenerativeModel(available_models[0]) if available_models else None
+        return genai.GenerativeModel(available_models[0])
     except Exception as e:
         st.error(f"Kesalahan Konfigurasi: {e}")
         st.stop()
@@ -42,9 +43,10 @@ def export_to_word(text, school_name):
 def export_to_pdf(text, school_name):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
+    pdf.set_font("Arial", 'B', 14)
     pdf.cell(190, 10, school_name, ln=True, align='C')
     pdf.set_font("Arial", size=10)
+    # PDF Sederhana hanya merender teks (Tabel Markdown akan dikonversi ke teks linear)
     clean_text = text.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 7, clean_text)
     return pdf.output(dest='S').encode('latin-1')
@@ -54,11 +56,23 @@ st.set_page_config(page_title="GuruAI - SMPN 2 Kalipare", layout="wide")
 
 st.markdown("""
     <style>
-    .header-box { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px; border-radius: 15px; text-align: center; }
+    .header-box { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; border-radius: 15px; text-align: center; }
     .main-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px; }
-    /* Menambah styling khusus tabel agar rapi di Streamlit */
-    table { width: 100%; border-collapse: collapse; }
-    th { background-color: #f2f2f2; }
+    /* Memperbaiki tampilan tabel di Streamlit */
+    div[data-testid="stMarkdownContainer"] table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #ddd;
+    }
+    div[data-testid="stMarkdownContainer"] th {
+        background-color: #f2f2f2;
+        padding: 10px;
+        border: 1px solid #ddd;
+    }
+    div[data-testid="stMarkdownContainer"] td {
+        padding: 10px;
+        border: 1px solid #ddd;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -81,40 +95,40 @@ with col1:
 
 with col2:
     st.write("⚙️ **Pengaturan Dokumen**")
-    mapel = st.text_input("Mata Pelajaran", "Umum")
+    mapel = st.text_input("Mata Pelajaran", "Seni Rupa")
     bentuk_soal = st.multiselect(
-        "Pilih Bentuk Soal:",
+        "Bentuk Soal:",
         ["Pilihan Ganda (PG)", "PG Kompleks", "Benar/Salah", "Menjodohkan", "Uraian"],
-        default=["Pilihan Ganda (PG)"]
+        default=["Pilihan Ganda (PG)", "Benar/Salah"]
     )
-    jumlah = st.slider("Total Jumlah Soal", 1, 40, 5)
+    jumlah = st.slider("Jumlah Soal", 1, 40, 5)
     
     if st.button("Generate Dokumen Rapi ✨"):
-        if materi_final and bentuk_soal:
-            with st.spinner("AI sedang merapikan tabel dan naskah soal..."):
+        if materi_final:
+            with st.spinner("Menyusun tabel dan naskah soal..."):
                 try:
                     str_bentuk = ", ".join(bentuk_soal)
                     prompt = (
-                        f"Anda adalah Guru Profesional di SMP NEGERI 2 KALIPARE. Materi: {materi_final[:5000]}. "
-                        f"Buatkan dokumen untuk mata pelajaran {mapel} dengan jumlah {jumlah} soal yang terdiri dari: {str_bentuk}.\n\n"
-                        f"WAJIB IKUTI FORMAT BERIKUT:\n"
-                        f"1. **KISI-KISI SOAL**: Buat dalam bentuk TABEL MARKDOWN (Kolom: No, Tujuan Pembelajaran, Materi, Indikator Soal, Level Kognitif, No Soal).\n"
-                        f"2. **KARTU SOAL**: Buat dalam bentuk TABEL MARKDOWN untuk SETIAP nomor soal (Kolom: Nomor, Kompetensi Dasat/TP, Materi, Indikator, Level, Kunci, Rumusan Soal).\n"
-                        f"3. **NASKAH SOAL**: Tampilkan soal secara teratur. Gunakan format tebal (bold) untuk stimulus soal. Pilihan jawaban A, B, C, D disusun ke bawah.\n"
-                        f"4. **KUNCI JAWABAN**: Berikan kunci jawaban dan pembahasan singkat.\n\n"
-                        f"Pastikan tabel Markdown memiliki garis pembatas yang jelas agar rapi di Streamlit."
+                        f"Materi: {materi_final[:5000]}. Mapel: {mapel}. Sekolah: SMP NEGERI 2 KALIPARE. "
+                        f"Buatkan {jumlah} soal dengan variasi bentuk: {str_bentuk}.\n\n"
+                        f"FORMAT WAJIB:\n"
+                        f"1. **KISI-KISI SOAL**: Buat satu tabel Markdown dengan kolom (No, Tujuan Pembelajaran, Materi, Indikator, Level Kognitif, No Soal).\n"
+                        f"2. **KARTU SOAL**: Buat tabel Markdown terpisah untuk SETIAP nomor soal. Setiap tabel berisi baris: Nomor, TP, Materi, Indikator, Level, Kunci, dan Rumusan Soal.\n"
+                        f"3. **NASKAH SOAL**: Tulis soal secara sistematis. Beri jarak antar nomor. Gunakan stimulus teks yang relevan sebelum pertanyaan.\n"
+                        f"4. **KUNCI & PEMBAHASAN**: Daftar kunci jawaban beserta penjelasan logisnya.\n\n"
+                        f"PENTING: Gunakan sintaks tabel Markdown '|' secara konsisten agar rapi."
                     )
                     
                     response = model.generate_content(prompt)
                     hasil = response.text
                     
-                    st.success("✅ Dokumen Berhasil Disusun!")
-                    st.markdown(hasil) # Streamlit otomatis merender tabel Markdown
+                    st.markdown("### 📋 Hasil Perangkat Ujian")
+                    st.markdown(hasil)
                     
                     st.divider()
-                    st.download_button("Download Word (.docx)", data=export_to_word(hasil, "SMP NEGERI 2 KALIPARE"), file_name=f"Soal_{mapel}.docx", use_container_width=True)
-                    st.download_button("Download PDF (.pdf)", data=export_to_pdf(hasil, "SMP NEGERI 2 KALIPARE"), file_name=f"Soal_{mapel}.pdf", use_container_width=True)
+                    st.download_button("📥 Simpan ke Word", data=export_to_word(hasil, "SMP NEGERI 2 KALIPARE"), file_name=f"Soal_{mapel}.docx", use_container_width=True)
+                    st.download_button("📥 Simpan ke PDF", data=export_to_pdf(hasil, "SMP NEGERI 2 KALIPARE"), file_name=f"Soal_{mapel}.pdf", use_container_width=True)
                 except Exception as e:
                     st.error(f"Gagal: {e}")
         else:
-            st.warning("Lengkapi materi dan bentuk soal!")
+            st.warning("Materi kosong!")
