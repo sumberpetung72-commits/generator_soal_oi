@@ -22,29 +22,32 @@ def init_api():
 
 model = init_api()
 
-# --- 2. FUNGSI EKSPOR WORD (DIPERKUAT UNTUK TABEL) ---
+# --- 2. FUNGSI EKSPOR WORD (LOGIKA TABEL DIPERKUAT) ---
 def export_to_word(text, school_name, mapel):
     doc = Document()
-    title = doc.add_heading('PERANGKAT PENILAIAN - SMPN 2 KALIPARE', 0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    doc.add_paragraph(f"Satuan Pendidikan: {school_name}\nMata Pelajaran: {mapel}\nKelas / Fase: VII / Fase D\n" + "-"*40)
+    # Judul Identitas
+    h = doc.add_heading('APLIKASI - SMPN 2 KALIPARE', 0)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Satuan Pendidikan: {school_name}\nMata Pelajaran: {mapel}\nKelas / Fase: VII / Fase D\nKurikulum: Kurikulum Merdeka\n" + "-"*40)
     
     table_data = []
     in_table = False
     
-    for line in text.split('\n'):
+    lines = text.split('\n')
+    for line in lines:
         clean = line.strip()
-        # Deteksi Tabel (Mencari karakter |)
+        # Deteksi Baris Tabel Markdown
         if '|' in clean:
-            # Lewati baris dekorasi markdown (---|---)
+            # Abaikan baris pemisah markdown ---|---
             if all(c in '|- : ' for c in clean) and clean != "":
                 continue
-            cells = [c.strip() for c in clean.split('|') if c.strip()]
+            # Ambil data sel
+            cells = [c.strip() for c in clean.split('|') if c.strip() or clean.startswith('|')]
             if cells:
                 table_data.append(cells)
                 in_table = True
         else:
-            # Jika tabel selesai, cetak ke Word
+            # Jika tabel berakhir, buat tabel di Word
             if in_table and table_data:
                 try:
                     num_cols = max(len(r) for r in table_data)
@@ -56,11 +59,11 @@ def export_to_word(text, school_name, mapel):
                                 table.cell(r, c).text = val
                 except:
                     pass
-                doc.add_paragraph("")
+                doc.add_paragraph("") # Spasi setelah tabel
                 table_data = []
                 in_table = False
             
-            # Cetak teks biasa
+            # Tambahkan teks non-tabel
             if clean:
                 if clean.startswith('###'):
                     doc.add_heading(clean.replace('###', ''), level=1)
@@ -69,13 +72,13 @@ def export_to_word(text, school_name, mapel):
                     p.add_run(clean.replace('**', '')).bold = True
                 else:
                     doc.add_paragraph(clean)
-    
+                    
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
-# --- 3. UI DASHBOARD ---
+# --- 3. UI STREAMLIT ---
 st.set_page_config(page_title="GuruAI - SMPN 2 Kalipare", layout="wide")
 st.markdown('<div style="background:#1e3c72;color:white;padding:20px;border-radius:10px;text-align:center;"><h1>SMP NEGERI 2 KALIPARE</h1><p>Generator Soal HOTS & Perangkat Administrasi</p></div>', unsafe_allow_html=True)
 
@@ -109,22 +112,32 @@ with col2:
     
     if st.button("Generate Perangkat Lengkap ✨"):
         if materi_text:
-            with st.spinner("Menyusun soal dan tabel..."):
+            with st.spinner("Sedang menyusun soal HOTS dan tabel kartu..."):
                 try:
                     rincian = ", ".join([f"{v} soal {k}" for k, v in dict_jumlah.items() if v > 0])
                     prompt = (
                         f"Instansi: SMP NEGERI 2 KALIPARE. Mapel: {mapel_name}. Materi: {materi_text[:2500]}.\n"
-                        f"Buatlah soal HOTS dengan rincian: {rincian}.\n\n"
-                        f"ATURAN KHUSUS TABEL:\n"
-                        f"1. ### KISI-KISI: Buat tabel (No|TP|Materi|Indikator|Level|No Soal).\n"
-                        f"2. ### KARTU SOAL: Tabel per nomor (Baris: CP, TP, Materi Utama, Buku Sumber, Indikator, Level, Bentuk, No/Kunci/Skor, Stimulus, Soal, Opsi).\n"
-                        f"3. ### NASKAH SOAL: KHUSUS soal Menjodohkan, tampilkan dalam bentuk TABEL Markdown dengan 2 kolom: 'Pernyataan/Kolom A' dan 'Pilihan Jawaban/Kolom B'.\n"
-                        f"4. ### KUNCI JAWABAN: Sertakan kunci yang jelas."
+                        f"Tugas: Buat soal HOTS (Level L3) dengan rincian: {rincian}.\n\n"
+                        f"STRUKTUR WAJIB (HARUS TABEL MARKDOWN):\n"
+                        f"1. ### KISI-KISI SOAL: Buat satu tabel (No|TP|Materi|Indikator|Level|No Soal).\n"
+                        f"2. ### KARTU SOAL: Setiap nomor soal WAJIB dibuat dalam tabel Markdown terpisah.\n"
+                        f"   Baris Tabel: | Komponen | Deskripsi |\n"
+                        f"   Isi: CP, TP, Materi Utama, Buku Sumber, Indikator, Level (L3), Bentuk, No/Kunci/Skor, Stimulus, Rumusan Soal, Opsi.\n"
+                        f"3. ### NASKAH SOAL: \n"
+                        f"   - Khusus Menjodohkan: WAJIB buat tabel 2 kolom (| Pernyataan A | Pilihan B |).\n"
+                        f"   - Bentuk lain: Teks rapi.\n"
+                        f"4. ### KUNCI JAWABAN."
                     )
                     
                     res = model.generate_content(prompt)
                     output = res.text
                     st.markdown(output)
-                    st.download_button("📥 Download Word", export_to_word(output, "SMP NEGERI 2 KALIPARE", mapel_name), f"Perangkat_{mapel_name}.docx")
+                    
+                    st.download_button(
+                        "📥 Download Word", 
+                        export_to_word(output, "SMP NEGERI 2 KALIPARE", mapel_name), 
+                        f"Perangkat_{mapel_name}.docx",
+                        use_container_width=True
+                    )
                 except Exception as e:
                     st.error(f"Kesalahan: {e}")
