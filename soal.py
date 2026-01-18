@@ -105,7 +105,7 @@ with col2:
         total_semua = sum(dict_jumlah.values())
         st.markdown(f"""
             <div style="background:#f0f2f6; padding:15px; border-radius:10px; border-left:5px solid #1e3c72; margin-top:10px;">
-                <h4 style="margin:0; color:#1e3c72;">Total Keseluruhan Soal: {total_semua}</h4>
+                <h4 style="margin:0; color:#1e3c72;">Jumlah Soal: {total_semua}</h4>
             </div>
         """, unsafe_allow_html=True)
     
@@ -133,3 +133,4 @@ with col2:
                         st.error("⚠️ Kuota API habis. Mohon tunggu 1 menit (Limit 20x/hari).")
                     else:
                         st.error(f"Kesalahan: {e}")
+
